@@ -24,6 +24,18 @@ RD = RES + '/report_data/' if os.path.isdir(RES + '/report_data') else ROOT + '/
 E = load(PARQUET); DF = E.df; DEF_P, DEF_R = PressureParams(), RateParams(); LOCK = threading.Lock()
 app = FastAPI(title='SupeRR Selector: Pressure Lab API'); app.add_middleware(CORSMiddleware, allow_origins=['http://localhost:3000'], allow_methods=['GET', 'POST'], allow_headers=['*'])   # production is same-origin; this only serves `pnpm dev`
 
+import ctypes, gc
+try: _libc = ctypes.CDLL('libc.so.6'); _trim = lambda: _libc.malloc_trim(0)
+except OSError: _trim = lambda: None
+import asyncio
+_SEM = asyncio.Semaphore(1)
+@app.middleware('http')
+async def one_computation_at_a_time(request, call_next):   # recomputations run one by one (bounded memory), then freed memory is handed back to the OS
+    if request.method == 'POST' and request.url.path.startswith('/api/'):
+        async with _SEM:
+            resp = await call_next(request); gc.collect(); _trim(); return resp
+    return await call_next(request)
+
 # ------------------------------------------------------------------ reference tables (pack only)
 teams = pd.read_csv(REF + '/teams.csv').drop_duplicates('team_id').set_index('team_id').team_name
 _m = pd.read_csv(REF + '/matches.csv'); _c = pd.read_csv(REF + '/competitions.csv').set_index('comp_id').comp_name
@@ -108,7 +120,7 @@ def players(kind: str = 'bat', q: str = ''):
 @app.post('/api/player')
 def player(body: dict):
     kind = body.get('kind', 'bat'); pid = int(body['id']); p = P_from(body.get('pressure')); pi = pi_of(body.get('pressure')); T, _, rp = rank_of(kind, body)
-    d = DF.assign(PI=pi.values); hi_m = (d.PI >= p.high_pct) & (d.PI > 0)
+    d = DF[['striker_id', 'bowler_id', 'legal', 'extras_type', 'tier', 'year', 'phase', 'bat_oppc', 'bowl_oppc', 'runs', 'tot', 'four', 'six', 'out_striker', 'bwk', 'match_id', 'innings', 'date', 'batting_team_id', 'bowling_team_id']].assign(PI=pi.values); hi_m = (d.PI >= p.high_pct) & (d.PI > 0)
     if kind == 'bat': s = d[(d.striker_id == pid) & (d.legal == 1)]; col = 'runs'
     else: s = d[(d.bowler_id == pid) & ~d.extras_type.isin(['byes', 'legbyes'])]; col = 'tot'
     if s.empty: raise HTTPException(404, 'no balls')

@@ -24,5 +24,5 @@ For front-end development: `uvicorn api.main:app --port 8000` and, in `web/`, `p
 
 ## Deploy on Render
 1. Push this folder to a **private** repository and create a Render *Blueprint* (uses `render.yaml`), or a Docker web service.
-2. Choose an instance with at least ~1 GB of memory (the Docker image uses about 465 MB after use).
+2. The free instance is enough: the service was tested under a 512 MB limit (about 360 MB in use, with heavy concurrent requests). A free instance sleeps after ~15 minutes without traffic and takes about a minute to wake.
 3. Optional: to keep the data out of git instead, remove it from the repository and set `DATA_URL` to a private link to a zip with `dash_balls.parquet` and `ref/*.csv` (optional `DATA_AUTH` header value).

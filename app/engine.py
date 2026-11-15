@@ -97,7 +97,7 @@ class Engine:
         return np.ones(len(dates)) if not hl else 0.5 ** (((cut - dates).dt.days.clip(lower=0)) / hl).values
 
     def _eligible(self, kind, pi, high, mask, rp):
-        d = self.df[mask]; idc = 'striker_id' if kind == 'bat' else 'bowler_id'; pm = pi[mask]
+        idc = 'striker_id' if kind == 'bat' else 'bowler_id'; d = self.df.loc[mask, [idc, 'legal', 'match_id', 'innings', 'drun']]; pm = pi[mask]
         n_w = pm.groupby(d[idc]).sum(); n_hi = (d.legal.eq(1) & (pm >= high) & (pm > 0)).groupby(d[idc]).sum()
         sgn = 1 if kind == 'bat' else -1
         a = pd.DataFrame({'idc': d[idc], 'm': d.match_id, 'i': d.innings, 'v': sgn * d.drun * pm, 'w': pm}).groupby(['idc', 'm', 'i']).sum().reset_index()
@@ -107,14 +107,14 @@ class Engine:
         return out
 
     def _ipl_share(self, kind, pi, mask):
-        d = self.df[mask]; idc = 'striker_id' if kind == 'bat' else 'bowler_id'; ipl = (d.tier == 'IPL').values
+        idc = 'striker_id' if kind == 'bat' else 'bowler_id'; d = self.df.loc[mask, [idc, 'tier']]; ipl = (d.tier == 'IPL').values
         tot = pi[mask].groupby(d[idc]).sum(); ip = (pi[mask] * ipl).groupby(d[idc]).sum()
         return (ip / tot.replace(0, np.nan)).fillna(0.0)
 
     def bat_table(self, pi, p, rp, cut=None, model=False, rowmask=None):
         cut = cut or self.maxdate + pd.Timedelta(days=1); mask = self.df.date < cut; high = p.high_pct
         if rowmask is not None: mask = mask & rowmask
-        d = self.df[mask & (self.df.legal == 1)].copy(); d['pi'] = pi[d.index]
+        d = self.df.loc[mask & (self.df.legal == 1), ['date', 'tier', 'year', 'phase', 'bat_oppc', 'ord_grp', 'runs', 'striker_id', 'four', 'six', 'out_striker', 'match_id', 'innings', 'legal']].copy(); d['pi'] = pi[d.index]   # column subset keeps per-request memory small
         keys = ['tier', 'year', 'phase'] + (['bat_oppc'] if rp.opp_adjust else []) + (['ord_grp'] if rp.role_adjust else [])
         d['w'] = self._w(d.date, rp.hl_bat, cut); hi = (d.pi >= high) & (d.pi > 0)
         d['ba'] = d.groupby(keys, observed=True).runs.transform('mean'); d['bh'] = d[hi].groupby(keys, observed=True).runs.transform('mean')
@@ -140,7 +140,7 @@ class Engine:
     def bowl_table(self, pi, p, rp, cut=None, model=True, rowmask=None):
         cut = cut or self.maxdate + pd.Timedelta(days=1); mask = (self.df.date < cut) & ~self.df.extras_type.isin(['byes', 'legbyes']); high = p.high_pct
         if rowmask is not None: mask = mask & rowmask
-        d = self.df[mask].copy(); d['pi'] = pi[d.index]; keys = ['tier', 'year', 'phase'] + (['bowl_oppc'] if rp.opp_adjust else []) + (['pace_or_spin'] if rp.role_adjust else [])
+        d = self.df.loc[mask, ['date', 'tier', 'year', 'phase', 'bowl_oppc', 'pace_or_spin', 'tot', 'bwk', 'legal', 'extras_type', 'bowler_id', 'delivery_style', 'match_id', 'innings']].copy(); d['pi'] = pi[d.index]; keys = ['tier', 'year', 'phase'] + (['bowl_oppc'] if rp.opp_adjust else []) + (['pace_or_spin'] if rp.role_adjust else [])
         d['w'] = self._w(d.date, rp.hl_bowl, cut); hi = (d.pi >= high) & (d.pi > 0)
         d['bt'] = d.groupby(keys, observed=True).tot.transform('mean'); d['bw'] = d.groupby(keys, observed=True).bwk.transform('mean')
         d['bth'] = d[hi].groupby(keys, observed=True).tot.transform('mean'); d['bwh'] = d[hi].groupby(keys, observed=True).bwk.transform('mean'); d['btl'] = d[~hi].groupby(keys, observed=True).tot.transform('mean')
@@ -162,7 +162,7 @@ class Engine:
         return T
 
     def _model(self, pi, kind, rp, cut, mask):
-        d = self.df[mask]
+        d = self.df.loc[mask, ['striker_id', 'bowler_id', 'batting_team_id', 'bowling_team_id', 'date', 'delta', 'drun', 'extras_type']]
         if kind == 'bat': d = d[~d.extras_type.isin(['wide', 'byes', 'legbyes'])]
         idc, oth, optm = ('striker_id', 'bowler_id', 'bowling_team_id') if kind == 'bat' else ('bowler_id', 'striker_id', 'batting_team_id')
         n = len(d); pm = pi[d.index].values; sw = self._w(d.date, rp.hl_bat if kind == 'bat' else rp.hl_bowl, cut); cs = 1 / np.sqrt(rp.mult)
@@ -294,4 +294,6 @@ def aggregate(R, borda, min_top25=8):
 
 
 def load(path):
-    return Engine(pd.read_parquet(path))
+    df = pd.read_parquet(path)
+    for c in df.select_dtypes('int64').columns: df[c] = df[c].astype('int32')   # half the memory; values are small counts and ids
+    return Engine(df)

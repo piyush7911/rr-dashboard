@@ -2,7 +2,7 @@ services:
   - type: web
     name: superr-pressure-lab
     runtime: docker
-    plan: standard            # the engine holds the ball table and caches in memory; ~1 GB+ is safer than 512 MB
+    plan: free                # tested under a 512 MB limit (about 360 MB in use with heavy concurrent use)
     healthCheckPath: /api/meta
     envVars:
       - key: DATA_URL         # only needed if the data is not baked into the image (private link to a zip)
