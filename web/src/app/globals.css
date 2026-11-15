@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+@custom-variant data-active (&[data-active], &[data-selected]);
+@custom-variant data-open (&[data-open], &[data-popup-open], &[data-state="open"]);
+@custom-variant data-closed (&[data-closed], &[data-state="closed"]);
+@custom-variant data-checked (&[data-checked], &[data-state="checked"]);
+@custom-variant data-unchecked (&[data-unchecked], &[data-state="unchecked"]);
+@custom-variant data-disabled (&[data-disabled]);
+@custom-variant data-highlighted (&[data-highlighted]);
+
+/* Rajasthan Royals palette: royal blue #254AA5, pink #EA1A85, deep navy rail; neutrals are cool greys. */
+:root {
+  --radius: 0.8rem;
+  --background: #f5f7fc;
+  --foreground: #0d1a3f;
+  --card: #ffffff;
+  --card-foreground: #0d1a3f;
+  --popover: #ffffff;
+  --popover-foreground: #0d1a3f;
+  --primary: #254aa5;
+  --primary-foreground: #ffffff;
+  --secondary: #eaeffa;
+  --secondary-foreground: #1b3680;
+  --muted: #eef1f8;
+  --muted-foreground: #5a678a;
+  --accent: #fde6f2;
+  --accent-foreground: #a30f5c;
+  --destructive: #d55e00;
+  --border: #e2e7f2;
+  --input: #dfe5f1;
+  --ring: #254aa5;
+  --rr-blue: #254aa5;
+  --rr-pink: #ea1a85;
+  --rr-navy: #0a1a4a;
+  --rr-gold: #e69f00;
+  --chart-1: #254aa5;
+  --chart-2: #ea1a85;
+  --chart-3: #56b4e9;
+  --chart-4: #e69f00;
+  --chart-5: #009e73;
+  --sidebar: #0a1a4a;
+  --sidebar-foreground: #dbe3f8;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-rr-blue: var(--rr-blue);
+  --color-rr-pink: var(--rr-pink);
+  --color-rr-navy: var(--rr-navy);
+  --color-rr-gold: var(--rr-gold);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* { border-color: var(--border); }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-variant-numeric: tabular-nums; }
+.grid-bg { background-image: radial-gradient(circle at 1px 1px, rgba(37, 74, 165, 0.09) 1px, transparent 0); background-size: 22px 22px; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cfd7ea; border-radius: 8px; }
+
+/* ---- motion ---- */
+@keyframes page-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.page-enter { animation: page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+[data-slot="chart"], table.num { animation: fade-in 420ms ease-out both; }
+.page-enter > div > * { animation: rise 460ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+.page-enter > div > *:nth-child(2) { animation-delay: 40ms; } .page-enter > div > *:nth-child(3) { animation-delay: 80ms; }
+.page-enter > div > *:nth-child(4) { animation-delay: 120ms; } .page-enter > div > *:nth-child(5) { animation-delay: 160ms; }
+.page-enter > div > *:nth-child(n+6) { animation-delay: 200ms; }
+@media (prefers-reduced-motion: reduce) { .page-enter, .page-enter > div > *, [data-slot="chart"], table.num { animation: none !important; } }
+
+/* view-only report: no printing, no text selection */
+@media print { body { display: none !important; } }
+body.report-locked, body.report-locked * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

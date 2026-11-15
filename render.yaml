@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: superr-pressure-lab
+    runtime: docker
+    plan: standard            # the engine holds the ball table and caches in memory; ~1 GB+ is safer than 512 MB
+    healthCheckPath: /api/meta
+    envVars:
+      - key: DATA_URL         # only needed if the data is not baked into the image (private link to a zip)
+        sync: false
+      - key: DATA_AUTH        # optional Authorization header value for DATA_URL
+        sync: false
