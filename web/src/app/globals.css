@@ -2,15 +2,6 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
-@custom-variant data-horizontal (&[data-orientation="horizontal"]);
-@custom-variant data-vertical (&[data-orientation="vertical"]);
-@custom-variant data-active (&[data-active], &[data-selected]);
-@custom-variant data-open (&[data-open], &[data-popup-open], &[data-state="open"]);
-@custom-variant data-closed (&[data-closed], &[data-state="closed"]);
-@custom-variant data-checked (&[data-checked], &[data-state="checked"]);
-@custom-variant data-unchecked (&[data-unchecked], &[data-state="unchecked"]);
-@custom-variant data-disabled (&[data-disabled]);
-@custom-variant data-highlighted (&[data-highlighted]);
 
 /* Rajasthan Royals palette: royal blue #254AA5, pink #EA1A85, deep navy rail; neutrals are cool greys. */
 :root {
@@ -93,22 +84,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 .num { font-variant-numeric: tabular-nums; }
-.grid-bg { background-image: radial-gradient(circle at 1px 1px, rgba(37, 74, 165, 0.09) 1px, transparent 0); background-size: 22px 22px; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #cfd7ea; border-radius: 8px; }
 
 /* ---- motion ---- */
 @keyframes page-enter { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .page-enter { animation: page-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both; }
-[data-slot="chart"], table.num { animation: fade-in 420ms ease-out both; }
 .page-enter > div > * { animation: rise 460ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .page-enter > div > *:nth-child(2) { animation-delay: 40ms; } .page-enter > div > *:nth-child(3) { animation-delay: 80ms; }
 .page-enter > div > *:nth-child(4) { animation-delay: 120ms; } .page-enter > div > *:nth-child(5) { animation-delay: 160ms; }
 .page-enter > div > *:nth-child(n+6) { animation-delay: 200ms; }
-@media (prefers-reduced-motion: reduce) { .page-enter, .page-enter > div > *, [data-slot="chart"], table.num { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .page-enter, .page-enter > div > * { animation: none !important; } }
 
-/* view-only report: no printing, no text selection */
-@media print { body { display: none !important; } }
-body.report-locked, body.report-locked * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }

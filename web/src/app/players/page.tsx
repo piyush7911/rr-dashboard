@@ -1,79 +1,94 @@
 "use client"
-import { ANIM, DUR } from "@/lib/anim"
-import { Suspense, useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Bar, BarChart, CartesianGrid, Cell, Legend, PolarAngleAxis, PolarGrid, Radar, RadarChart, ReferenceLine, Scatter, ScatterChart, XAxis, YAxis, ZAxis } from "recharts"
+import { useEffect, useMemo, useState } from "react"
 import { Search } from "lucide-react"
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { PageHeader, Panel, Pill, Kpi, Seg, Loading } from "@/components/ui-bits"
+import { GroupedBars, InningsStrip, PairedBars, C } from "@/components/charts"
 import { Input } from "@/components/ui/input"
-import { Kpi, Loading, PageHeader, Panel, Pill, Seg } from "@/components/ui-bits"
-import { useParams } from "@/lib/params"
-import { useGet, usePost } from "@/lib/use-api"
-import { f1, LABELS, pct } from "@/lib/format"
-import type { Kind, PlayerOut } from "@/lib/types"
+import { usePlayers, useSummary } from "@/lib/data"
+import { pct } from "@/lib/format"
+import type { Kind, Player, Summary } from "@/lib/types"
 
-const cfg: ChartConfig = { usual: { label: "Usual", color: "#56b4e9" }, high: { label: "HIGH pressure", color: "#ea1a85" } }
-function Inner() {
-  const sp = useSearchParams(); const router = useRouter(); const { debounced } = useParams()
-  const kind = (sp.get("kind") as Kind) ?? "bat"; const id = sp.get("id"); const [q, setQ] = useState(""); const [dq, setDq] = useState("")
-  useEffect(() => { const t = setTimeout(() => setDq(q), 250); return () => clearTimeout(t) }, [q])
-  const list = useGet<{ id: number; name: string; balls: number }[]>(`/players?kind=${kind}&q=${encodeURIComponent(dq)}`)
-  const { data: pl, loading } = usePost<PlayerOut>("/player", { kind, id: Number(id), pressure: debounced.pressure, rate: debounced.rate }, !!id)
-  const go = (k: string, i?: number) => router.replace(`/players?kind=${k}${i ? `&id=${i}` : ""}`)
-  const bat = kind === "bat"; const metric = (s: any) => (s ? (bat ? s.sr : s.econ) : null)
-  const ORDER = ['PP', 'Mid', 'Death']
-  const phaseData = pl?.by_phase.slice().sort((a, b) => ORDER.indexOf(a.phase) - ORDER.indexOf(b.phase)).map((p) => ({ name: { PP: "Powerplay", Mid: "Overs 7–15", Death: "Death overs" }[p.phase] ?? p.phase, usual: metric(p.usual), high: metric(p.high) })) ?? []
-  const yearData = pl?.by_year.map((p) => ({ name: String(p.year), usual: metric(p.usual), high: metric(p.high) })) ?? []
-  const inn = pl?.innings.map((r, i) => ({ i: i + 1, v: r.v, label: `${r.date} v ${r.opp_name}` })) ?? []
-  const labels = LABELS(kind); const keys = bat ? ["SRoA", "SRhA", "res", "cons"] : ["Pz", "res", "relz", "cz"]
-  const SHORT: Record<string, string> = { SRoA: 'Overall', SRhA: 'Pressure', res: 'Resilience', cons: 'Consistency', Pz: 'Pressure', relz: 'Consistency', cz: 'Specific' }
-  const comp = pl ? keys.map((k) => ({ k: SHORT[k] ?? labels[k], v: pl.components[k] ?? 0 })) : []
-  const above = inn.filter((x) => x.v > 0).length
+function notes(p: Player, s?: Summary) {
+  const out: { t: string; tone: "green" | "pink" | "grey" | "gold" }[] = []; const bat = p.kind === "bat"
+  if (p.final_rank) out.push({ t: `Final rank ${p.final_rank}`, tone: "green" })
+  if (s && p.final_rank && s.lists[p.kind].close_in.includes(p.name)) out.push({ t: "Close call for the last places of the top 10", tone: "gold" })
+  if (p.n_high < 75) out.push({ t: `Small pressure sample (${p.n_high} HIGH balls); rating leans on overall level`, tone: "gold" })
+  if (p.ipl_share < 0.3) out.push({ t: `Mostly international evidence (IPL share ${pct(p.ipl_share)})`, tone: "grey" })
+  if (p.stab && p.stab.top10_d != null && p.stab.top10_d < 0.25 && p.final_rank) out.push({ t: `Sensitive to the pressure definition (top 10 in ${pct(p.stab.top10_d)} of alternatives)`, tone: "pink" })
+  const res = p.comp.res; if (res != null) out.push({ t: res > (bat ? 5 : 0.3) ? "Performs better under pressure than usual" : res < (bat ? -10 : -0.3) ? "Below his own usual level under pressure, but still above the league" : "Holds his usual level under pressure", tone: "grey" })
+  return out
+}
+
+function Card({ p, s }: { p: Player; s?: Summary }) {
+  const bat = p.kind === "bat"; const H = p.high, U = p.usual; const unit = bat ? "runs/100 balls" : "runs/over"
+  const yearData = p.by_year.map((y) => ({ name: String(y.year), usual: (bat ? y.usual?.sr : y.usual?.econ) ?? null, high: (bat ? y.high?.sr : y.high?.econ) ?? null }))
+  const order = ['PP', 'Mid', 'Death']; const phaseData = [...p.by_phase].sort((a, b) => order.indexOf(a.phase) - order.indexOf(b.phase)).map((y) => ({ name: y.phase === "PP" ? "Powerplay" : y.phase === "Mid" ? "Middle" : "Death", usual: (bat ? y.usual?.sr : y.usual?.econ) ?? null, high: (bat ? y.high?.sr : y.high?.econ) ?? null }))
+  const c = p.comp
   return (
     <div className="space-y-5">
-      <PageHeader eyebrow="Player cards" title="Player profile" desc="Compare a player’s performance on HIGH-pressure balls with his usual level, by phase and by year." right={<div className="w-52"><Seg value={kind} onChange={(v) => go(v)} options={[{ v: "bat", l: "Batters" }, { v: "bowl", l: "Bowlers" }]} /></div>} />
-      <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
-        <Panel title="Select player">
-          <div className="relative mb-3"><Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by name" className="h-9 pl-8 text-sm" /></div>
-          <div className="max-h-[520px] space-y-0.5 overflow-y-auto pr-1">{list.data?.map((p) => <button key={p.id} onClick={() => go(kind, p.id)} className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${String(p.id) === id ? "bg-rr-blue text-white" : "hover:bg-secondary"}`}><span className="truncate">{p.name}</span><span className={`num text-[11px] ${String(p.id) === id ? "text-white/70" : "text-muted-foreground"}`}>{p.balls}</span></button>)}</div>
+      <div className="rounded-2xl bg-gradient-to-br from-rr-navy via-[#13307f] to-rr-blue p-6 text-white">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-rr-pink">{bat ? "Batter" : "Bowler"}{p.type ? ` · ${p.type}` : ""}{p.pos ? ` · usually batting at ${p.pos.toFixed(0)}` : ""}</div><h2 className="mt-1 text-2xl font-semibold tracking-tight">{p.name}</h2><div className="mt-1 text-xs text-white/70">{p.matches} matches · last match {p.last_match}</div></div>
+          <div className="text-right"><div className="text-[11px] uppercase tracking-wider text-white/60">{p.final_rank ? "Final rank" : "Pool rank"}</div><div className="num text-4xl font-semibold">{p.final_rank ?? p.pool_rank}</div></div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-1.5">{notes(p, s).map((n) => <Pill key={n.t} tone={n.tone}>{n.t}</Pill>)}</div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Score" value={p.score.toFixed(2)} sub="standardised, higher is better" />
+        <Kpi label="HIGH balls" value={p.n_high} sub={`${p.n_app ?? "–"} pressure innings or spells`} accent="pink" />
+        <Kpi label="Top 10 in (match resamples)" value={p.stab ? pct(p.stab.top10_r) : "–"} sub={p.stab ? `rank range ${p.stab.p10.toFixed(0)}–${p.stab.p90.toFixed(0)}` : "not in the candidate set"} accent="gold" />
+        <Kpi label="Top 10 in (alternative definitions)" value={p.stab?.top10_d != null ? pct(p.stab.top10_d) : "–"} sub={`IPL share ${pct(p.ipl_share)}`} />
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="Usual level against level under pressure" desc="Raw, unadjusted description. HIGH balls in chases are scored faster by everyone.">
+          <PairedBars dec={bat ? 0 : 2} rows={bat ? [{ label: "Strike rate", usual: U?.sr ?? null, high: H?.sr ?? null }, { label: "Boundary %", usual: U?.boundary ?? null, high: H?.boundary ?? null }, { label: "Dot-ball %", usual: U?.dot ?? null, high: H?.dot ?? null, lowerBetter: true }, { label: "Dismissals per 100 balls", usual: U?.out ?? null, high: H?.out ?? null, lowerBetter: true }]
+            : [{ label: "Economy (runs per over)", usual: U?.econ ?? null, high: H?.econ ?? null, lowerBetter: true }, { label: "Dot-ball %", usual: U?.dot ?? null, high: H?.dot ?? null }, { label: "Wickets per 100 balls", usual: U?.wkts ?? null, high: H?.wkts ?? null }, { label: "Wides and no-balls %", usual: U?.wides ?? null, high: H?.wides ?? null, lowerBetter: true }]} />
         </Panel>
-        {!id ? <div className="grid place-items-center rounded-xl border border-dashed p-12 text-sm text-muted-foreground">Select a player to view the profile.</div> : !pl ? <Loading h={500} /> : (
-          <div className="space-y-5">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-gradient-to-r from-rr-navy to-rr-blue p-5 text-white">
-              <div><div className="text-xl font-semibold">{pl.name}</div><div className="mt-1 text-xs text-white/70">{pl.teams_played.join(" · ")} · {pl.matches} matches · {pct(pl.ipl_share)} of balls in the IPL</div></div>
-              <div className="flex flex-wrap gap-2">{pl.consensus_rank && <span className="rounded-full bg-rr-pink px-3 py-1 text-xs font-semibold">Consensus rank {pl.consensus_rank}</span>}<span className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium">{pl.eligible ? `Rank ${pl.rank} of ${pl.n_eligible} (current settings)` : "Not eligible under current settings"}</span>{loading && <span className="rounded-full bg-white/15 px-3 py-1 text-xs">Updating…</span>}</div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Kpi label="HIGH-pressure balls" value={pl.high?.balls ?? 0} sub={`${pl.usual?.balls ?? 0} on ordinary balls`} />
-              <Kpi label={bat ? "Strike rate, usual → HIGH" : "Economy, usual → HIGH"} value={<span className="text-xl">{f1(metric(pl.usual), bat ? 0 : 2)} → {f1(metric(pl.high), bat ? 0 : 2)}</span>} accent="pink" />
-              <Kpi label={bat ? "Out per 100 HIGH balls" : "Wickets per 100 HIGH balls"} value={f1(bat ? pl.high?.out : pl.high?.wkts)} sub={`usual ${f1(bat ? pl.usual?.out : pl.usual?.wkts)}`} />
-              <Kpi label={bat ? "Innings above league" : "Spells above league"} value={inn.length ? `${above}/${inn.length}` : "–"} sub={inn.length ? pct(above / inn.length) + (bat ? " of innings" : " of spells") : undefined} accent="gold" />
-            </div>
-            <div className="grid gap-5 lg:grid-cols-2">
-              <Panel title={bat ? "Strike rate by phase" : "Economy by phase"} desc="Unadjusted: usual versus HIGH-pressure balls">
-                <ChartContainer config={cfg} className="h-[230px] w-full"><BarChart data={phaseData} barCategoryGap="30%" margin={{ left: -10, top: 6 }}><CartesianGrid vertical={false} stroke="#e8ecf5" /><XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11.5} /><YAxis tickLine={false} axisLine={false} fontSize={11} /><ChartTooltip content={<ChartTooltipContent indicator="dot" />} /><Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} /><Bar dataKey="usual" name="Usual" fill="#56b4e9" radius={[5, 5, 0, 0]} isAnimationActive={ANIM} animationDuration={DUR} /><Bar dataKey="high" name="HIGH pressure" fill="#ea1a85" radius={[5, 5, 0, 0]} isAnimationActive={ANIM} animationDuration={DUR} /></BarChart></ChartContainer>
-              </Panel>
-              <Panel title={bat ? "Strike rate by year" : "Economy by year"} desc="Unadjusted: usual versus HIGH-pressure balls">
-                <ChartContainer config={cfg} className="h-[230px] w-full"><BarChart data={yearData} barCategoryGap="30%" margin={{ left: -10, top: 6 }}><CartesianGrid vertical={false} stroke="#e8ecf5" /><XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11.5} /><YAxis tickLine={false} axisLine={false} fontSize={11} /><ChartTooltip content={<ChartTooltipContent indicator="dot" />} /><Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} /><Bar dataKey="usual" name="Usual" fill="#56b4e9" radius={[5, 5, 0, 0]} isAnimationActive={ANIM} animationDuration={DUR} /><Bar dataKey="high" name="HIGH pressure" fill="#ea1a85" radius={[5, 5, 0, 0]} isAnimationActive={ANIM} animationDuration={DUR} /></BarChart></ChartContainer>
-              </Panel>
-            </div>
-            <div className="grid gap-5 lg:grid-cols-5">
-              <Panel className="lg:col-span-3" title={bat ? "Consistency by innings" : "Consistency by spell"} desc={`Pressure-weighted ${bat ? "runs above" : "runs saved against"} the league average. Blue: above; pink: below.`}>
-                {inn.length ? (
-                  <ChartContainer config={{ v: { label: "Value", color: "#254aa5" } }} className="h-[240px] w-full"><ScatterChart margin={{ left: -10, top: 6, right: 10 }}><CartesianGrid stroke="#e8ecf5" /><XAxis type="number" dataKey="i" tickLine={false} axisLine={false} fontSize={11} name="Innings #" /><YAxis type="number" dataKey="v" tickLine={false} axisLine={false} fontSize={11} /><ZAxis range={[40, 40]} /><ReferenceLine y={0} stroke="#0a1a4a" strokeWidth={1.2} /><ChartTooltip content={({ payload }) => payload?.length ? <div className="rounded-lg border bg-white px-2.5 py-1.5 text-xs shadow"><div className="font-medium">{(payload[0].payload as any).label}</div><div className="num text-muted-foreground">{f1((payload[0].payload as any).v, 2)}</div></div> : null} /><Scatter data={inn} isAnimationActive={ANIM} animationDuration={DUR}>{inn.map((d, i) => <Cell key={i} fill={d.v > 0 ? "#254aa5" : "#ea1a85"} fillOpacity={0.8} />)}</Scatter></ScatterChart></ChartContainer>
-                ) : <div className="grid h-[240px] place-items-center text-sm text-muted-foreground">No innings with enough pressure balls.</div>}
-              </Panel>
-              <Panel className="lg:col-span-2" title="Score components" desc="Standardised across eligible players (0 = average)">
-                {pl.eligible ? (
-                  <ChartContainer config={{ v: { label: "z", color: "#254aa5" } }} className="mx-auto h-[240px] w-full"><RadarChart data={comp} outerRadius="62%" margin={{ left: 44, right: 44, top: 12, bottom: 12 }}><PolarGrid stroke="#dfe5f1" /><PolarAngleAxis dataKey="k" fontSize={11} /><Radar dataKey="v" stroke="#254aa5" fill="#254aa5" fillOpacity={0.25} strokeWidth={2} isAnimationActive={ANIM} animationDuration={DUR} /><ChartTooltip content={<ChartTooltipContent />} /></RadarChart></ChartContainer>
-                ) : <div className="grid h-[240px] place-items-center text-center text-sm text-muted-foreground">Not eligible under current settings.<br />Relax the eligibility rules to see components.</div>}
-              </Panel>
-            </div>
-            {pl.consensus_rank && <Panel title="Stability across 200 definitions"><div className="flex flex-wrap gap-2 text-[13px]"><Pill tone="blue">Consensus rank {pl.consensus_rank}</Pill><Pill tone="green">In top 10 under {pct(pl.top10_share)} of definitions</Pill><Pill tone="grey">Rank range {f1(pl.p10, 0)}–{f1(pl.p90, 0)}</Pill></div></Panel>}
+        <Panel title="Where the score comes from" desc="Adjusted components, each against the league in the same condition">
+          <dl className="space-y-2.5 text-[13px]">
+            {([["Overall level", bat ? c.SRoA : c.ECOa, bat ? "runs per 100 balls vs league" : "runs per over saved vs league"], ["Observed pressure edge", c.edge_eb != null && c.shrink ? c.edge_eb / c.shrink : null, "level on HIGH balls minus level on usual balls"], ["Share of the edge treated as real (B)", c.shrink, "empirical-Bayes weight: τ² / (τ² + sampling variance)"], ["Edge counted in the score", c.edge_eb, "B × observed edge"], ["Expected pressure level", c.EBh, "overall level + edge counted"], ...(bat ? [["Consistency", c.cons, "share of pressure innings above league"]] : [["Opposition-adjusted rating", c.Pz, "ridge model at HIGH pressure"], ["Consistency", c.relz, "share of pressure spells above league (z)"]])] as [string, number | null, string][]).map(([l, v, d]) => (
+              <div key={l} className="flex items-baseline justify-between gap-3 border-b border-border/50 pb-1.5"><div><dt className="font-medium">{l}</dt><dd className="text-[11px] text-muted-foreground">{d}</dd></div><span className="num text-base font-semibold">{v == null ? "–" : l.startsWith("Share of the edge") ? pct(v) : v.toFixed(2)}</span></div>
+            ))}
+          </dl>
+        </Panel>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="By season" desc={`${bat ? "Strike rate" : "Economy"}, usual against HIGH balls`}><GroupedBars data={yearData} unit={bat ? "sr" : "econ"} /></Panel>
+        <Panel title="By phase of the innings" desc={`${bat ? "Strike rate" : "Economy"}, usual against HIGH balls`}><GroupedBars data={phaseData} unit={bat ? "sr" : "econ"} /></Panel>
+      </div>
+      <Panel title="Consistency: every pressure innings" desc={`${bat ? "Pressure-weighted runs per 100 balls" : "Pressure-weighted runs per over saved"} against the league. Blue = above the league, vermillion = below.`}
+        right={<Pill tone="grey">{p.innings.filter((i) => i.val > 0).length} of {p.innings.length} above league</Pill>}>
+        {p.innings.length ? <InningsStrip innings={p.innings} unit={unit} /> : <p className="text-sm text-muted-foreground">No pressure innings with enough pressure-weighted balls.</p>}
+      </Panel>
+      {p.phase_share_high && <Panel title="Where his pressure balls come from"><div className="flex flex-wrap gap-6 text-[13px]"><div className="flex gap-4">{(["PP", "Mid", "Death"] as const).map((k) => <div key={k}><div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k === "PP" ? "Powerplay" : k === "Mid" ? "Middle" : "Death"}</div><div className="num text-lg font-semibold">{pct(p.phase_share_high![k])}</div></div>)}</div><div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">In a chase</div><div className="num text-lg font-semibold">{pct(p.chase_share_high ?? 0)}</div></div></div></Panel>}
+    </div>
+  )
+}
+
+export default function Players() {
+  const { data: pl } = usePlayers(); const { data: s } = useSummary()
+  const [kind, setKind] = useState<Kind>("bat"); const [q, setQ] = useState(""); const [sel, setSel] = useState<number | null>(null)
+  useEffect(() => { const u = new URLSearchParams(window.location.search); const k = u.get("kind"); const id = u.get("id"); if (k === "bat" || k === "bowl") setKind(k); if (id) setSel(+id) }, [])
+  const list = useMemo(() => (pl?.[kind] ?? []).filter((p) => p.name.toLowerCase().includes(q.toLowerCase())).sort((a, b) => (a.final_rank ?? 99) - (b.final_rank ?? 99) || a.pool_rank - b.pool_rank), [pl, kind, q])
+  const cur = useMemo(() => { const all = pl?.[kind] ?? []; return all.find((p) => p.id === sel) ?? all.find((p) => p.final_rank === 1) ?? null }, [pl, kind, sel])
+  const pick = (id: number) => { setSel(id); window.history.replaceState(null, "", `?kind=${kind}&id=${id}`); window.scrollTo({ top: 0, behavior: "smooth" }) }
+  return (
+    <div className="space-y-6">
+      <PageHeader eyebrow="Players" title="Player cards" desc="Every eligible player, with the comparison against his usual level, consistency, season and phase splits, and stability." />
+      <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
+        <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
+          <Seg value={kind} onChange={(k) => { setKind(k); setSel(null) }} options={[{ v: "bat", l: "Batters" }, { v: "bowl", l: "Bowlers" }]} />
+          <div className="relative"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search player" className="pl-8" /></div>
+          <div className="max-h-[70vh] space-y-0.5 overflow-y-auto rounded-xl border border-border bg-card p-1.5">
+            {!pl ? <Loading h={300} /> : list.map((p) => (
+              <button key={p.id} onClick={() => pick(p.id)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition ${p.id === cur?.id ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}>
+                <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[11px] font-bold ${p.final_rank ? "bg-rr-blue text-white" : "bg-muted text-muted-foreground"}`}>{p.final_rank ?? p.pool_rank}</span><span className="truncate">{p.name}</span>
+              </button>
+            ))}
           </div>
-        )}
+        </aside>
+        <div>{cur ? <Card p={cur} s={s} /> : <Panel><p className="py-16 text-center text-sm text-muted-foreground">Choose a player from the list, or open one from the rankings.</p></Panel>}</div>
       </div>
     </div>
   )
 }
-export default function Players() { return <Suspense fallback={<Loading h={400} />}><Inner /></Suspense> }

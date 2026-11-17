@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export",          // static site, served by the FastAPI service (single deployable)
+  output: "export",          // fully static site: pages read the JSON files in public/data (no backend)
   trailingSlash: true,
   images: { unoptimized: true },
   devIndicators: false,

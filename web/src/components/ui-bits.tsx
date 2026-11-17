@@ -26,7 +26,7 @@ export function Kpi({ label, value, sub, accent, className }: { label: string; v
     </Card>
   )
 }
-export function Panel({ title, desc, right, children, className }: { title?: string; desc?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({ title, desc, right, children, className, bodyClassName }: { title?: string; desc?: ReactNode; right?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
   return (
     <Card className={cn("gap-0 overflow-hidden p-0 shadow-none ring-1 ring-border", className)}>
       {(title || right) && (
@@ -38,7 +38,7 @@ export function Panel({ title, desc, right, children, className }: { title?: str
           {right}
         </div>
       )}
-      <div className="p-5">{children}</div>
+      <div className={cn("flex-1 p-5", bodyClassName)}>{children}</div>
     </Card>
   )
 }
@@ -55,31 +55,5 @@ export function Seg<T extends string | number>({ value, onChange, options, class
           className={cn("flex-1 rounded-md px-2 py-1 text-xs font-medium transition", value === o.v ? "bg-white text-rr-blue shadow-sm" : "text-muted-foreground hover:text-foreground")}>{o.l}</button>
       ))}
     </div>
-  )
-}
-export function Chips<T extends string | number>({ value, onChange, options }: { value: T[]; onChange: (v: T[]) => void; options: { v: T; l: string }[] }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((o) => {
-        const on = value.includes(o.v)
-        return (
-          <button key={String(o.v)} type="button" onClick={() => { const n = on ? value.filter((x) => x !== o.v) : [...value, o.v]; if (n.length) onChange(n) }}
-            className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium transition", on ? "border-rr-blue bg-rr-blue text-white" : "border-border bg-white text-muted-foreground hover:border-rr-blue/50")}>{o.l}</button>
-        )
-      })}
-    </div>
-  )
-}
-
-export function StatStrip({ items }: { items: { label: string; value: ReactNode; sub?: ReactNode }[] }) {
-  return (
-    <Card className="grid grid-cols-2 gap-0 overflow-hidden px-0 py-0 shadow-none ring-1 ring-border lg:grid-cols-4">
-      {items.map((it, i) => (
-        <div key={it.label} className={cn("px-5 py-3", i > 0 && "lg:border-l lg:border-border/70", i % 2 === 1 && "border-l border-border/70 lg:border-l", i >= 2 && "border-t border-border/70 lg:border-t-0")}>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{it.label}</div>
-          <div className="num mt-0.5 flex items-baseline gap-2"><span className="text-xl font-semibold tracking-tight">{it.value}</span>{it.sub && <span className="truncate text-xs text-muted-foreground">{it.sub}</span>}</div>
-        </div>
-      ))}
-    </Card>
   )
 }
