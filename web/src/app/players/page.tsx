@@ -4,9 +4,25 @@ import { Search } from "lucide-react"
 import { PageHeader, Panel, Pill, Kpi, Seg, Loading } from "@/components/ui-bits"
 import { GroupedBars, InningsStrip, PairedBars, C } from "@/components/charts"
 import { Input } from "@/components/ui/input"
+import { koRecord } from "@/components/knockout"
+import { PlayerPicker } from "@/components/player-picker"
 import { usePlayers, useSummary } from "@/lib/data"
 import { pct } from "@/lib/format"
 import type { Kind, Player, Summary } from "@/lib/types"
+
+function ShareBar({ title, parts }: { title: string; parts: { l: string; v: number; c: string }[] }) {
+  return (
+    <div>
+      <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{title}</div>
+      <div className="flex h-9 overflow-hidden rounded-lg bg-muted">
+        {parts.map((x) => <div key={x.l} className="grid place-items-center text-[12px] font-semibold text-white" style={{ width: `${Math.max(x.v * 100, 0)}%`, background: x.c }} title={`${x.l}: ${pct(x.v)}`}>{x.v >= 0.12 ? pct(x.v) : ""}</div>)}
+      </div>
+      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5 text-[12.5px]">
+        {parts.map((x) => <div key={x.l} className="flex items-center gap-1.5"><span className="size-2.5 rounded-sm" style={{ background: x.c }} /><span className="text-muted-foreground">{x.l}</span><span className="num font-semibold">{pct(x.v)}</span></div>)}
+      </div>
+    </div>
+  )
+}
 
 function notes(p: Player, s?: Summary) {
   const out: { t: string; tone: "green" | "pink" | "grey" | "gold" }[] = []; const bat = p.kind === "bat"
@@ -60,7 +76,21 @@ function Card({ p, s }: { p: Player; s?: Summary }) {
         right={<Pill tone="grey">{p.innings.filter((i) => i.val > 0).length} of {p.innings.length} above league</Pill>}>
         {p.innings.length ? <InningsStrip innings={p.innings} unit={unit} /> : <p className="text-sm text-muted-foreground">No pressure innings with enough pressure-weighted balls.</p>}
       </Panel>
-      {p.phase_share_high && <Panel title="Where his pressure balls come from"><div className="flex flex-wrap gap-6 text-[13px]"><div className="flex gap-4">{(["PP", "Mid", "Death"] as const).map((k) => <div key={k}><div className="text-[11px] uppercase tracking-wide text-muted-foreground">{k === "PP" ? "Powerplay" : k === "Mid" ? "Middle" : "Death"}</div><div className="num text-lg font-semibold">{pct(p.phase_share_high![k])}</div></div>)}</div><div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">In a chase</div><div className="num text-lg font-semibold">{pct(p.chase_share_high ?? 0)}</div></div></div></Panel>}
+      {p.phase_share_high && <Panel title="Where his pressure balls come from" desc={`Share of his ${p.n_high} HIGH-pressure balls, by phase of the innings and by innings`}>
+        <div className="grid gap-6 sm:grid-cols-2">
+          <ShareBar title="By phase" parts={[{ l: "Powerplay", v: p.phase_share_high.PP ?? 0, c: "#254aa5" }, { l: "Middle overs", v: p.phase_share_high.Mid ?? 0, c: "#56b4e9" }, { l: "Death overs", v: p.phase_share_high.Death ?? 0, c: "#ea1a85" }]} />
+          <ShareBar title="By innings" parts={[{ l: "First innings", v: 1 - (p.chase_share_high ?? 0), c: "#254aa5" }, { l: "Chase", v: p.chase_share_high ?? 0, c: "#ea1a85" }]} />
+        </div>
+      </Panel>}
+      {p.knockout && <Panel title="Knockout matches" desc="Supporting evidence only: the rating does not use it. Finals, qualifiers, eliminators and semi-finals are 28 of the 809 matches analysed.">
+        {p.knockout.balls === 0 ? <p className="text-[13px] text-muted-foreground">No knockout matches in the data for this player.</p> : (
+          <div className="grid gap-4 sm:grid-cols-4">
+            <div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Knockout matches</div><div className="num text-lg font-semibold">{p.knockout.matches}</div></div>
+            <div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Balls in knockouts</div><div className="num text-lg font-semibold">{p.knockout.balls}</div></div>
+            <div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Pressure balls in knockouts</div><div className="num text-lg font-semibold">{p.knockout.high_balls} <span className="text-[12px] font-normal text-muted-foreground">({pct(p.knockout.high_share ?? 0)} of his pressure balls)</span></div></div>
+            <div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">Record on those balls</div><div className="text-[13px] font-medium">{koRecord(p)}</div></div>
+          </div>)}
+      </Panel>}
     </div>
   )
 }
@@ -78,8 +108,9 @@ export default function Players() {
       <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
         <aside className="space-y-3 lg:sticky lg:top-20 lg:self-start">
           <Seg value={kind} onChange={(k) => { setKind(k); setSel(null) }} options={[{ v: "bat", l: "Batters" }, { v: "bowl", l: "Bowlers" }]} />
-          <div className="relative"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search player" className="pl-8" /></div>
-          <div className="max-h-[70vh] space-y-0.5 overflow-y-auto rounded-xl border border-border bg-card p-1.5">
+          <PlayerPicker players={list} current={cur} onPick={pick} />
+          <div className="relative hidden lg:block"><Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" /><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search player" className="pl-8" /></div>
+          <div className="hidden max-h-[70vh] space-y-0.5 overflow-y-auto rounded-xl border border-border bg-card p-1.5 lg:block">
             {!pl ? <Loading h={300} /> : list.map((p) => (
               <button key={p.id} onClick={() => pick(p.id)} className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] transition ${p.id === cur?.id ? "bg-secondary text-secondary-foreground" : "hover:bg-muted"}`}>
                 <span className={`grid size-6 shrink-0 place-items-center rounded-md text-[11px] font-bold ${p.final_rank ? "bg-rr-blue text-white" : "bg-muted text-muted-foreground"}`}>{p.final_rank ?? p.pool_rank}</span><span className="truncate">{p.name}</span>

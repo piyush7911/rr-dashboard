@@ -1,4 +1,8 @@
-"""Static file server for the built dashboard (web/out) that tells browsers not to cache, so a rebuilt site and refreshed data always show up."""
+"""Static file server for the built dashboard.
+
+Serves web/out and sends no-cache headers, so a rebuilt site and refreshed data always show up.
+Usage: python serve.py [port=8000] [directory=out]
+"""
 import sys, functools
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 

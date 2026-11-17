@@ -15,6 +15,7 @@ export type Player = {
   comp: Record<string, number | null>; high: Stat; usual: Stat; by_year: { year: number; usual: Stat; high: Stat }[]; by_phase: { phase: string; usual: Stat; high: Stat }[]
   innings: { date: string; opp: string; val: number; tier: string }[]
   stab: { top10_r: number; median: number; p10: number; p90: number; top10_d: number | null; def_p10: number | null; def_p90: number | null; eligible_share: number } | null
+  knockout: { matches: number; balls: number; high_balls: number; high_share: number | null; high: Stat } | null
   type: string | null; pos: number | null; phase_share_high: Record<string, number> | null; chase_share_high: number | null
 }
 export type Players = Record<Kind, Player[]>

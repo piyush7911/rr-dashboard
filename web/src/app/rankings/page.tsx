@@ -3,6 +3,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { PageHeader, Panel, Pill, Seg, Loading } from "@/components/ui-bits"
 import { PoolScatter, Legend, C } from "@/components/charts"
+import { KnockoutTable } from "@/components/knockout"
 import { usePlayers, useSummary } from "@/lib/data"
 import { pct } from "@/lib/format"
 import type { Kind, Player } from "@/lib/types"
@@ -41,6 +42,9 @@ export default function Rankings() {
       <Panel title={kind === "bat" ? "Top 10 batters" : "Top 10 bowlers"} desc={s ? `Both lists use the same method. Top-10 share = share of ${s.n_resamples.toLocaleString()} match resamples that keep the player in the top 10.` : undefined} className="overflow-x-auto">
         {!pl ? <Loading h={420} /> : <table className="w-full min-w-[760px] text-[13px]">{head}<tbody>{fin.map((p) => <Row key={p.id} p={p} rank={p.final_rank!} />)}</tbody></table>}
         {s && <p className="mt-3 rounded-lg bg-accent/60 px-3 py-2 text-[11.5px] leading-snug text-accent-foreground"><b>Close calls:</b> the evidence cannot reliably separate {s.lists[kind].close_in.join(", ")} from {s.lists[kind].close_out.join(", ")}; the order shown follows the ordering rule (Method page). A 75-ball floor would replace {s.floor75[kind].out.join(", ")} with {s.floor75[kind].into.join(", ")} (see Method).</p>}
+      </Panel>
+      <Panel title="Knockout matches" desc="How each finalist did on pressure balls in finals, qualifiers, eliminators and semi-finals (28 of the 809 matches). Supporting evidence only: the ranking does not use it, and most samples are small.">
+        {pl ? <KnockoutTable players={fin} /> : <Loading h={200} />}
       </Panel>
       <div className="space-y-5">
         <Panel title="Level against consistency" desc="Every eligible player; the final ten are highlighted. Click a dot to open the card.">
